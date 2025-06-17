@@ -1,7 +1,4 @@
-# Docs: https://github.com/Azure/webapps-deploy
-# Docs sobre Python em Azure Web Apps: https://aka.ms/python-webapps-actions
-
-name: Build and deploy Python app to Azure Web App - bigdataav2
+name: Deploy Streamlit App to Azure Web App
 
 on:
   push:
@@ -10,70 +7,39 @@ on:
   workflow_dispatch:
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout código
+        uses: actions/checkout@v4
 
-      - name: Set up Python version
+      - name: Configurar Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12'
 
-      - name: Create and start virtual environment
+      - name: Instalar dependências
         run: |
-          python -m venv venv
-          source venv/bin/activate
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt -f https://download.pytorch.org/whl/torch_stable.html
+      - name: Criar comando de startup
+        run: echo "streamlit run app.py --server.port 8000 --server.address 0.0.0.0" > startup.txt
 
-      - name: Zip artifact for deployment
+      - name: Zipar arquivos para deploy
         run: |
-          zip -r release.zip . -x "venv/*" ".github/*" ".git/*" "*.pyc" "__pycache__/*"
+          zip -r release.zip . -x "*.git*" "*.github*" "venv/*" "__pycache__/*"
 
-      - name: Upload artifact for deployment jobs
-        uses: actions/upload-artifact@v4
-        with:
-          name: python-app
-          path: release.zip
-
-  deploy:
-    runs-on: ubuntu-latest
-    needs: build
-    environment:
-      name: 'Production'
-      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
-    permissions:
-      id-token: write
-      contents: read
-
-    steps:
-      - name: Download artifact from build job
-        uses: actions/download-artifact@v4
-        with:
-          name: python-app
-
-      - name: Unzip artifact for deployment
-        run: unzip release.zip
-
-      - name: Login to Azure
+      - name: Login no Azure
         uses: azure/login@v2
         with:
-          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID_6AE3DFA85EA843699EEC4EF12CD4A181 }}
-          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID_6EAEAC7E3F0C416A99E80B83D35DC7E5 }}
-          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID_27A50777AB2649B7BE12D0F94AA4F7D3 }}
+          client-id: ${{ secrets.AZUREAPPSERVICE_CLIENTID }}
+          tenant-id: ${{ secrets.AZUREAPPSERVICE_TENANTID }}
+          subscription-id: ${{ secrets.AZUREAPPSERVICE_SUBSCRIPTIONID }}
 
-      - name: Deploy to Azure Web App
+      - name: Deploy para Azure Web App
         uses: azure/webapps-deploy@v3
-        id: deploy-to-webapp
         with:
           app-name: 'bigdataav2'
-          slot-name: 'Production'
           package: release.zip
-
-      - name: Verificar conteúdo do ZIP
-        run: unzip -l release.zip
